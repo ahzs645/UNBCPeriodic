@@ -57,17 +57,27 @@ suppress_female_dt = false;  // [true,false]
 // Suppress male dovetails
 suppress_male_dt = false;  // [true,false]
 
-/*[Component Selection]*/
+/*[Text Configuration]*/
+// Enable bottom text
+enable_bottom_text = true;  // [true,false]
+// Custom text line 1 (leave empty for auto-generated dovetail info)
+custom_text_1 = "";  // Custom first line of text
+// Custom text line 2 (leave empty for auto-generated size info)  
+custom_text_2 = "";  // Custom second line of text
+// Text size
+text_size = 4;  // [2:0.5:8]
+// Text depth (engraving depth)
+text_depth = 1;  // [0.5:0.1:3]
 // Which component to render
 component = "single_box";  // [single_box,assembly_demo,type1_inner,type2_top_edge,type3_right_edge,type4_bottom_edge,type5_left_edge,type6_corner_topleft,type7_corner_topright,type8_corner_bottomleft,type9_corner_bottomright,type10_lanthanide_left,type11_lanthanide_middle,type12_lanthanide_right,type13_gap_spacer]
 
-/*[Demo Assembly]*/
+/*[Component Selection]*/
 // Number of boxes in X direction for demo
 demo_boxes_x = 3;  // [1:1:5]
 // Number of boxes in Y direction for demo  
 demo_boxes_y = 3;  // [1:1:5]
 
-/*[Hidden - Derived Parameters]*/
+/*[Demo Assembly]*/
 // Calculate actual box dimensions
 box_width = (box_width_units > 0) ? box_width_units * box_units : box_wall * 2;
 box_length = box_length_units * box_units;
@@ -155,8 +165,7 @@ module periodic_box(
                                         slide = box_height,
                                         width = male_dt_width,
                                         height = male_dt_inside, 
-                                        back_width = male_dt_back,
-                                        spin = 0);
+                                        back_width = male_dt_back);
                         }
                     }
                     
@@ -173,8 +182,7 @@ module periodic_box(
                                         slide = box_height,
                                         width = male_dt_width,
                                         height = male_dt_inside,
-                                        back_width = male_dt_back,  
-                                        spin = 90);
+                                        back_width = male_dt_back);
                         }
                     }
                 }
@@ -183,15 +191,15 @@ module periodic_box(
         
         // Subtract female dovetails if not suppressed
         if (!suppress_female) {
-            // South side female dovetails
+            // Back side female dovetails (opposite of front male dovetails)
             if (box_length_units > 0) {
                 for (i = [0:box_length_units-1]) {
                     translate([
                         (i + 0.5) * box_units - box_length/2,
-                        -box_width/2 - female_dt_inside/2,
+                        box_width/2,
                         box_height/2
                     ])
-                    rotate([0, 90, 0])
+                    rotate([90, 0, 180])
                         dovetail("female",
                                 slide = box_height + eps,
                                 width = female_dt_width,
@@ -200,15 +208,15 @@ module periodic_box(
                 }
             }
             
-            // East side female dovetails
+            // Right side female dovetails (opposite of left male dovetails)
             if (box_width_units > 0) {
                 for (i = [0:box_width_units-1]) {
                     translate([
-                        box_length/2 + female_dt_inside/2,
+                        box_length/2,
                         (i + 0.5) * box_units - box_width/2,
                         box_height/2
                     ])
-                    rotate([0, 90, 90])
+                    rotate([90, 0, 90])
                         dovetail("female",
                                 slide = box_height + eps,
                                 width = female_dt_width,
@@ -246,13 +254,15 @@ module periodic_box(
                 ], anchor=BOTTOM);
         }
         
-        // Card slot
+        // Info text on bottom
         if (enable_card && card_side != "none") {
             add_card_slot(card_side);
         }
         
-        // Info text on bottom
-        add_info_text();
+        // Bottom text
+        if (enable_bottom_text) {
+            add_info_text();
+        }
     }
     
     // Add rounded bottom if enabled
@@ -287,15 +297,18 @@ module add_card_slot(side) {
 }
 
 module add_info_text() {
-    dt_text = str("DT:", dt_width, "x", dt_inside_length);
-    size_text = str(box_units, "x", box_height, "x", box_wall);
+    // Use custom text if provided, otherwise generate default text
+    line1_text = (custom_text_1 != "") ? custom_text_1 : str("DT:", dt_width, "x", dt_inside_length);
+    line2_text = (custom_text_2 != "") ? custom_text_2 : str(box_units, "x", box_height, "x", box_wall);
     
-    translate([0, 0, 1]) {
-        linear_extrude(1)
-            text(dt_text, halign="center", valign="bottom", size=4);
-        translate([0, -8, 0])
-            linear_extrude(1)
-                text(size_text, halign="center", valign="top", size=4);
+    translate([0, 0, text_depth]) {
+        // First line of text
+        linear_extrude(text_depth)
+            text(line1_text, halign="center", valign="bottom", size=text_size);
+        // Second line of text
+        translate([0, -text_size * 1.5, 0])
+            linear_extrude(text_depth)
+                text(line2_text, halign="center", valign="top", size=text_size);
     }
 }
 
@@ -348,148 +361,92 @@ module assembly_demo() {
 }
 
 //==============================================================================
-// PREDEFINED BOX TYPES
+// PREDEFINED BOX TYPES - Call periodic_box with specific parameters
 //==============================================================================
 
+// Helper function to convert string booleans to actual booleans
+function str_to_bool(str) = (str == "true") ? true : false;
+
+// Main function to create a box type with specific configuration
+module create_box_type(
+    north_open_str = "false",
+    south_open_str = "false", 
+    suppress_female_str = "false",
+    suppress_male_str = "false",
+    enable_card_str = "true",
+    card_side_str = "south"
+) {
+    periodic_box(
+        north_open = str_to_bool(north_open_str) || (north_open_str == "open"),
+        south_open = str_to_bool(south_open_str) || (south_open_str == "open"),
+        suppress_female = str_to_bool(suppress_female_str),
+        suppress_male = str_to_bool(suppress_male_str),
+        enable_card = str_to_bool(enable_card_str),
+        card_side = card_side_str
+    );
+}
+
+// Type 1: Inner Box (most common)
 module type1_inner_box() {
-    periodic_box(
-        north_open = false,
-        south_open = false,
-        suppress_female = false, 
-        suppress_male = false,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "false", "false", "false", "true", "south");
 }
 
+// Type 2: Top Edge (north wall open)
 module type2_top_edge() {
-    periodic_box(
-        north_open = true,
-        south_open = false,
-        suppress_female = false,
-        suppress_male = false,
-        enable_card = true, 
-        card_side = "south"
-    );
+    create_box_type("true", "false", "false", "false", "true", "south");
 }
 
+// Type 3: Right Edge (no male dovetails on right)
 module type3_right_edge() {
-    periodic_box(
-        north_open = false,
-        south_open = false,
-        suppress_female = false,
-        suppress_male = true,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "false", "false", "true", "true", "south");
 }
 
+// Type 4: Bottom Edge (south wall open, no male dovetails)
 module type4_bottom_edge() {
-    periodic_box(
-        north_open = false,
-        south_open = true,
-        suppress_female = false,
-        suppress_male = true,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "true", "false", "true", "true", "south");
 }
 
+// Type 5: Left Edge (no female dovetails on left)
 module type5_left_edge() {
-    periodic_box(
-        north_open = false,
-        south_open = false,
-        suppress_female = true,
-        suppress_male = false,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "false", "true", "false", "true", "south");
 }
 
+// Type 6: Corner Top-Left (Hydrogen)
 module type6_corner_topleft() {
-    periodic_box(
-        north_open = true,
-        south_open = false,
-        suppress_female = true,
-        suppress_male = false,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("true", "false", "true", "false", "true", "south");
 }
 
+// Type 7: Corner Top-Right (Helium)
 module type7_corner_topright() {
-    periodic_box(
-        north_open = true,
-        south_open = false,
-        suppress_female = false,
-        suppress_male = true,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("true", "false", "false", "true", "true", "south");
 }
 
+// Type 8: Corner Bottom-Left (Francium)
 module type8_corner_bottomleft() {
-    periodic_box(
-        north_open = false,
-        south_open = true,
-        suppress_female = true,
-        suppress_male = false,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "true", "true", "false", "true", "south");
 }
 
+// Type 9: Corner Bottom-Right (Oganesson)
 module type9_corner_bottomright() {
-    periodic_box(
-        north_open = false,
-        south_open = true,
-        suppress_female = false,
-        suppress_male = true,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "true", "false", "true", "true", "south");
 }
 
+// Type 10: Lanthanide Left End
 module type10_lanthanide_left() {
-    periodic_box(
-        north_open = false,
-        south_open = true,
-        suppress_female = true,
-        suppress_male = false,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "true", "true", "false", "true", "south");
 }
 
+// Type 11: Lanthanide Middle
 module type11_lanthanide_middle() {
-    periodic_box(
-        north_open = false,
-        south_open = true,
-        suppress_female = false,
-        suppress_male = false,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "true", "false", "false", "true", "south");
 }
 
+// Type 12: Lanthanide Right End
 module type12_lanthanide_right() {
-    periodic_box(
-        north_open = false,
-        south_open = true,
-        suppress_female = false,
-        suppress_male = true,
-        enable_card = true,
-        card_side = "south"
-    );
+    create_box_type("false", "true", "false", "true", "true", "south");
 }
 
+// Type 13: Gap Spacer (no card slot)
 module type13_gap_spacer() {
-    periodic_box(
-        north_open = false,
-        south_open = false,
-        suppress_female = false,
-        suppress_male = false,
-        enable_card = false,
-        card_side = "none"
-    );
+    create_box_type("false", "false", "false", "false", "false", "none");
 }
